@@ -1775,7 +1775,14 @@ const DTYPE={Fire:"fire",Frost:"frost",Shock:"shock",Poison:"poison",Magic:"magi
 function spellBase(s){ return s.base&&CMP.spells.find(x=>x.name===s.base)||null; }
 function spellStrOf(s){ if(s.sstr!==undefined&&s.sstr!=="") return s.sstr; const b=spellBase(s); if(!b||!b.rows) return ""; const i=(b.levels||[]).indexOf(n(s.level)); return i>=0?String((b.rows["Spell Str"]||[])[i]??""):""; }
 function spellVarOf(s){ if(s.svar) return s.svar; const b=spellBase(s); if(!b) return ""; const m=b.name.match(/^(.*)\[[^\]]+\](.*)$/); if(!m) return ""; const v=s.name.slice(m[1].length,s.name.length-m[2].length); return v.trim(); }
-function spellRounds(b){ const t=b.textEn||b.text; if(/\b1 round\b/.test(t)) return 1; if(/\b1 minute\b|for one minute/i.test(t)) return 10; if(/minutes/.test(t)) return 10; return 0; }
+// длительность в раундах: 1 раунд = 6 секунд, 1 минута = 10 раундов; «[Spell Strength] minutes» — по силе заклинания
+function spellRounds(b,sv){ const t=b.textEn||b.text||""; let m;
+  if(/\b(1|one) round\b/i.test(t)) return 1;
+  if((m=t.match(/\bfor (\d+) rounds\b/i))) return +m[1];
+  if(/\b(1|one) minute\b/i.test(t)) return 10;
+  if(/\[Spell Strength\] minutes/i.test(t)) return 10*Math.max(1,n(sv));
+  if((m=t.match(/\b(\d+) minutes\b/i))) return 10*+m[1];
+  return 0; }
 function fxList(){ if(!S.fx) S.fx=[]; return S.fx; }
 function fxAR(type){ return fxList().filter(f=>f.key==="ar"&&(f.data.type===type||(f.data.type==="magic"&&type!=="phys"))).reduce((a,f)=>a+n(f.data.v),0); }
 function fxWard(){ return fxList().find(f=>f.key==="ward"); }
@@ -1793,7 +1800,7 @@ function fxEnd(id,quiet){
 }
 function fxCast(s,cost){
   const b=spellBase(s); if(!b) return "";
-  const str=spellStrOf(s), v=spellVarOf(s), sv=n(str), rounds=spellRounds(b), nm=s.name, bn=b.name;
+  const str=spellStrOf(s), v=spellVarOf(s), sv=n(str), rounds=spellRounds(b,sv), nm=s.name, bn=b.name;
   const base={name:nm,spell:s.name,rounds,cost,upkeep:/Upkeep/.test(b.attr)};
   fxList().filter(f=>f.spell===s.name).forEach(f=>fxEnd(f.id,true)); // повторное сотворение заменяет эффект
   if(bn==="Armor"||bn==="Magic Armor"||bn==="[Type] Armor"){ const type=bn==="Armor"?"phys":bn==="Magic Armor"?"magic":(DTYPE[v]||"magic"); fxAdd({...base,key:"ar",data:{type,v:sv}}); return `Эффект: +${sv} ${type==="phys"?"AR":"AR против "+DMGT.find(x=>x[0]===type)[1].toLowerCase()} всем зонам.`; }
@@ -1831,7 +1838,7 @@ function fxUpkeep(id,viaAP){
   let cost=n(f.cost); if(f.key==="barrier"&&n(f.data.hp)>0) cost=0; // остаток HP барьера — поддержание бесплатно
   if(viaAP){ if(n(S.cur.ap)<1){ toast("Нет ОД"); return; } S.cur.ap=n(S.cur.ap)-1; cost=0; }
   if(cost>n(S.cur.mp)){ toast(`Не хватает MP: нужно ${cost}`); return; }
-  S.cur.mp=n(S.cur.mp)-cost; f.rounds=b?spellRounds(b)||1:1; f.expired=false; if(f.key==="barrier") f.data.hp=f.data.max;
+  S.cur.mp=n(S.cur.mp)-cost; f.rounds=b?spellRounds(b,spellStrOf(s))||1:1; f.expired=false; if(f.key==="barrier") f.data.hp=f.data.max;
   addLog(`Поддержание: ${esc(f.name)}${viaAP?" (1 ОД, Living Armory)":cost?` (−${cost} MP)`:" (бесплатно)"}`); save(); rerenderKeep();
 }
 function fxPanel(){ const L=fxList(); if(!L.length) return "";
@@ -2938,7 +2945,7 @@ function act(a,t){
     case "stance": { if(!S.stance&&n(S.cur.ap)<1){ toast("Не хватает ОД"); break; } S.stance=!S.stance; if(S.stance){ S.cur.ap=n(S.cur.ap)-1; S.aim=0; } save(); refresh(); toast(S.stance?"Защитная стойка: +10 к защите, атаки до след. хода — 0 (−1 ОД)":"Защитная стойка снята"); } break;
     case "spellDmg": { const s=S.spells[R.spell.i]; const r=rollExpr(s.dmg); if(!r){toast("Неверная формула урона");break;} let tot=r.total; if(R.result.crit==="ok"){ tot=maxExpr(s.dmg); } addLog(`Урон «${esc(s.name)}»: <b>${tot}</b> <span class="muted">${R.result.crit==="ok"?"максимум (крит)":esc(r.detail)}</span>`); toast(`Урон: ${tot}`); } break;
     case "initiative": { const r=rnd(6); const pen=d.woundPen?-2:0; const tot=r+d.ir+pen; addLog(`Инициатива: <b>${tot}</b> <span class="muted">1d6[${r}] + IR ${d.ir}${pen?" − 2 (ранение)":""}</span>`); toast(`Инициатива: ${tot}`); } break;
-    case "newRound": { fxTick(); let ap=d.ap; if(S.conds.dazed) ap=Math.max(1,ap-1); if(S.conds.stunned) ap=n(S.cur.ap); S.cur.ap=ap; S.stance=false; S.attacks=0; S.spTurn=false; S.heroic=false; save(); refresh(); toast(S.conds.stunned?"Ошеломлён — ОД не восстановлены":`Новый раунд: ОД ${ap}`); closeMenu(); } break;
+    case "newRound": { fxTick(); let ap=d.ap; if(S.conds.dazed) ap=Math.max(1,ap-1); if(S.conds.stunned) ap=n(S.cur.ap); S.cur.ap=ap; S.stance=false; S.attacks=0; S.spTurn=false; S.heroic=false; save(); rerenderKeep(); toast(S.conds.stunned?"Ошеломлён — ОД не восстановлены":`Новый раунд: ОД ${ap}`); closeMenu(); } break;
     case "shortRest": { if(n(S.fatigue)>0) S.fatigue=n(S.fatigue)-1; else S.cur.sp=Math.min(d.sp,n(S.cur.sp)+1); const mpg=Math.floor(d.mp/10); S.cur.mp=Math.min(d.mp,n(S.cur.mp)+mpg); save(); refresh(); closeMenu(); toast(`Короткий отдых: +1 ОВ/−1 усталость, +${mpg} MP`); addLog(`☾ Короткий отдых: +1 ОВ (или −1 усталость), +${mpg} MP`); } break;
     case "longRest": { let pts=d.EB; while(pts>0&&n(S.fatigue)>0){S.fatigue--;pts--;} S.cur.sp=Math.min(d.sp,n(S.cur.sp)+pts); const untreated=S.wounds.some(w=>!w.treated&&!w.healed); if(!untreated){ const h0=n(S.cur.hp); S.cur.hp=Math.min(d.hp,h0+d.EB); healBleed(n(S.cur.hp)-h0); } S.cur.mp=d.mp; save(); refresh(); closeMenu(); const msg=`☾☾ Длинный отдых: ОВ/усталость ${d.EB}, ${untreated?"HP не восстановлены (необработанные раны)":"+"+d.EB+" HP"}, MP полностью`; toast(msg.replace("☾☾ ","")); addLog(msg); } break;
     case "newSession": S.cur.lp=d.lp; save(); refresh(); closeMenu(); toast(`Удача восстановлена: ${d.lp} LP`); break;
@@ -4795,7 +4802,14 @@ const DTYPE={Fire:"fire",Frost:"frost",Shock:"shock",Poison:"poison",Magic:"magi
 function spellBase(s){ return s.base&&CMP.spells.find(x=>x.name===s.base)||null; }
 function spellStrOf(s){ if(s.sstr!==undefined&&s.sstr!=="") return s.sstr; const b=spellBase(s); if(!b||!b.rows) return ""; const i=(b.levels||[]).indexOf(n(s.level)); return i>=0?String((b.rows["Spell Str"]||[])[i]??""):""; }
 function spellVarOf(s){ if(s.svar) return s.svar; const b=spellBase(s); if(!b) return ""; const m=b.name.match(/^(.*)\[[^\]]+\](.*)$/); if(!m) return ""; const v=s.name.slice(m[1].length,s.name.length-m[2].length); return v.trim(); }
-function spellRounds(b){ const t=b.textEn||b.text; if(/\b1 round\b/.test(t)) return 1; if(/\b1 minute\b|for one minute/i.test(t)) return 10; if(/minutes/.test(t)) return 10; return 0; }
+// duration in rounds: 1 round = 6 seconds, 1 minute = 10 rounds; “[Spell Strength] minutes” — by spell strength
+function spellRounds(b,sv){ const t=b.textEn||b.text||""; let m;
+  if(/\b(1|one) round\b/i.test(t)) return 1;
+  if((m=t.match(/\bfor (\d+) rounds\b/i))) return +m[1];
+  if(/\b(1|one) minute\b/i.test(t)) return 10;
+  if(/\[Spell Strength\] minutes/i.test(t)) return 10*Math.max(1,n(sv));
+  if((m=t.match(/\b(\d+) minutes\b/i))) return 10*+m[1];
+  return 0; }
 function fxList(){ if(!S.fx) S.fx=[]; return S.fx; }
 function fxAR(type){ return fxList().filter(f=>f.key==="ar"&&(f.data.type===type||(f.data.type==="magic"&&type!=="phys"))).reduce((a,f)=>a+n(f.data.v),0); }
 function fxWard(){ return fxList().find(f=>f.key==="ward"); }
@@ -4813,7 +4827,7 @@ function fxEnd(id,quiet){
 }
 function fxCast(s,cost){
   const b=spellBase(s); if(!b) return "";
-  const str=spellStrOf(s), v=spellVarOf(s), sv=n(str), rounds=spellRounds(b), nm=s.name, bn=b.name;
+  const str=spellStrOf(s), v=spellVarOf(s), sv=n(str), rounds=spellRounds(b,sv), nm=s.name, bn=b.name;
   const base={name:nm,spell:s.name,rounds,cost,upkeep:/Upkeep/.test(b.attr)};
   fxList().filter(f=>f.spell===s.name).forEach(f=>fxEnd(f.id,true)); // casting again replaces the effect
   if(bn==="Armor"||bn==="Magic Armor"||bn==="[Type] Armor"){ const type=bn==="Armor"?"phys":bn==="Magic Armor"?"magic":(DTYPE[v]||"magic"); fxAdd({...base,key:"ar",data:{type,v:sv}}); return `Effect: +${sv} ${type==="phys"?"AR":"AR vs "+DMGT.find(x=>x[0]===type)[1].toLowerCase()} to all locations.`; }
@@ -4851,7 +4865,7 @@ function fxUpkeep(id,viaAP){
   let cost=n(f.cost); if(f.key==="barrier"&&n(f.data.hp)>0) cost=0; // barrier HP left — upkeep is free
   if(viaAP){ if(n(S.cur.ap)<1){ toast("No AP left"); return; } S.cur.ap=n(S.cur.ap)-1; cost=0; }
   if(cost>n(S.cur.mp)){ toast(`Not enough MP: need ${cost}`); return; }
-  S.cur.mp=n(S.cur.mp)-cost; f.rounds=b?spellRounds(b)||1:1; f.expired=false; if(f.key==="barrier") f.data.hp=f.data.max;
+  S.cur.mp=n(S.cur.mp)-cost; f.rounds=b?spellRounds(b,spellStrOf(s))||1:1; f.expired=false; if(f.key==="barrier") f.data.hp=f.data.max;
   addLog(`Upkeep: ${esc(f.name)}${viaAP?" (1 AP, Living Armory)":cost?` (−${cost} MP)`:" (free)"}`); save(); rerenderKeep();
 }
 function fxPanel(){ const L=fxList(); if(!L.length) return "";
@@ -5958,7 +5972,7 @@ function act(a,t){
     case "stance": { if(!S.stance&&n(S.cur.ap)<1){ toast("Not enough AP"); break; } S.stance=!S.stance; if(S.stance){ S.cur.ap=n(S.cur.ap)-1; S.aim=0; } save(); refresh(); toast(S.stance?"Defensive Stance: +10 to defense, attacks until next Turn — 0 (−1 AP)":"Defensive Stance removed"); } break;
     case "spellDmg": { const s=S.spells[R.spell.i]; const r=rollExpr(s.dmg); if(!r){toast("Invalid damage formula");break;} let tot=r.total; if(R.result.crit==="ok"){ tot=maxExpr(s.dmg); } addLog(`Damage “${esc(s.name)}»: <b>${tot}</b> <span class="muted">${R.result.crit==="ok"?"maximum (crit)":esc(r.detail)}</span>`); toast(`Damage: ${tot}`); } break;
     case "initiative": { const r=rnd(6); const pen=d.woundPen?-2:0; const tot=r+d.ir+pen; addLog(`Initiative: <b>${tot}</b> <span class="muted">1d6[${r}] + IR ${d.ir}${pen?" − 2 (wound)":""}</span>`); toast(`Initiative: ${tot}`); } break;
-    case "newRound": { fxTick(); let ap=d.ap; if(S.conds.dazed) ap=Math.max(1,ap-1); if(S.conds.stunned) ap=n(S.cur.ap); S.cur.ap=ap; S.stance=false; S.attacks=0; S.spTurn=false; S.heroic=false; save(); refresh(); toast(S.conds.stunned?"Stunned — AP not restored":`New round: AP ${ap}`); closeMenu(); } break;
+    case "newRound": { fxTick(); let ap=d.ap; if(S.conds.dazed) ap=Math.max(1,ap-1); if(S.conds.stunned) ap=n(S.cur.ap); S.cur.ap=ap; S.stance=false; S.attacks=0; S.spTurn=false; S.heroic=false; save(); rerenderKeep(); toast(S.conds.stunned?"Stunned — AP not restored":`New round: AP ${ap}`); closeMenu(); } break;
     case "shortRest": { if(n(S.fatigue)>0) S.fatigue=n(S.fatigue)-1; else S.cur.sp=Math.min(d.sp,n(S.cur.sp)+1); const mpg=Math.floor(d.mp/10); S.cur.mp=Math.min(d.mp,n(S.cur.mp)+mpg); save(); refresh(); closeMenu(); toast(`Short rest: +1 SP/−1 fatigue, +${mpg} MP`); addLog(`☾ Short rest: +1 SP (or −1 fatigue), +${mpg} MP`); } break;
     case "longRest": { let pts=d.EB; while(pts>0&&n(S.fatigue)>0){S.fatigue--;pts--;} S.cur.sp=Math.min(d.sp,n(S.cur.sp)+pts); const untreated=S.wounds.some(w=>!w.treated&&!w.healed); if(!untreated){ const h0=n(S.cur.hp); S.cur.hp=Math.min(d.hp,h0+d.EB); healBleed(n(S.cur.hp)-h0); } S.cur.mp=d.mp; save(); refresh(); closeMenu(); const msg=`☾☾ Long rest: SP/fatigue ${d.EB}, ${untreated?"HP not restored (untreated wounds)":"+"+d.EB+" HP"}, MP fully`; toast(msg.replace("☾☾ ","")); addLog(msg); } break;
     case "newSession": S.cur.lp=d.lp; save(); refresh(); closeMenu(); toast(`Luck restored: ${d.lp} LP`); break;
