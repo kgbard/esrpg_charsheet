@@ -151,6 +151,8 @@ label.f>span{letter-spacing:.03em}
 .skname .en{display:block;font-weight:400}
 .rank-0 td{opacity:1}
 tr.untr .skname{color:var(--ink2);font-weight:500}
+.tbl.skills tbody.skgrp+tbody.skgrp tr.skhead td{padding-top:16px}
+.tbl.skills tr.skhead td{font-family:var(--serif);font-weight:700;font-size:15px;color:var(--accent);border-bottom:2px solid var(--line2);padding-bottom:4px}
 .lst{display:flex;flex-direction:column;gap:8px}
 .item{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--paper);display:grid;gap:8px}
 .item .hd{display:flex;gap:8px;align-items:center}
@@ -986,11 +988,18 @@ function attrCard(k,t,fx){
     <div class="fx">${fx}</div><div class="note" data-calc="an-${k}"></div></div>`;
 }
 
+// навыки группами по выбранной характеристике, внутри группы — от высшего ранга
+function skillGroups(){
+  return CH.map(([c])=>{
+    const rows=SKILLS.filter(([k,,g])=>(g.includes(S.skills[k].gov)?S.skills[k].gov:g[0])===c).sort((x,y)=>n(S.skills[y[0]].rank)-n(S.skills[x[0]].rank)||x[1].localeCompare(y[1],"ru"));
+    return rows.length?`<tbody class="skgrp"><tr class="skhead"><td colspan="7">${CHN[c]} <span class="muted">${eff(c)}</span></td></tr>${rows.map(([k,ru,g])=>skillRow(k,ru,g,false)).join("")}</tbody>`:"";
+  }).join("");
+}
 function skillRow(k,ru,govs,isExtra,o){
   const s=isExtra?o:S.skills[k], base=isExtra?`extra.${o._i}`:`skills.${k}`;
   return `<tr class="${n(s.rank)<0?"untr":""}" data-skrow="${isExtra?"x:"+o.id:k}">
     <td class="skname">${isExtra?`<input data-b="${base}.name" value="${esc(s.name)}" style="font-weight:600">`:`${ru}<span class="en">${k}</span>`}</td>
-    <td style="width:80px">${sel(base+".gov",govOpts(govs))}</td>
+    <td style="width:80px">${sel(base+".gov",govOpts(govs),isExtra?"":'data-rr="1"')}</td>
     <td style="width:130px">${locked()?`<div style="display:flex;gap:3px;align-items:center;white-space:nowrap"><span style="flex:1">${RANKS_SHORT[n(s.rank)+1]}</span><button class="sm" data-adsk="${isExtra?"x:"+o.id:k}" data-v="-1" ${(advState().sk[isExtra?"x:"+o.id:k]||[]).length?"":"disabled"}>−</button><button class="sm pri" data-adsk="${isExtra?"x:"+o.id:k}" data-v="1" ${n(s.rank)>=5?"disabled":""}>＋</button></div>`:sel(base+".rank",RANKS.map((r,i)=>[r[0],RANKS_SHORT[i]]))}</td>
     <td class="hide-m">${inp(base+".spec",'placeholder="специализации"')}</td>
     <td class="num"><span class="tn" data-calc="tn-${isExtra?"x"+o.id:k}"></span></td>
@@ -1007,7 +1016,7 @@ function tSkills(){
     <p class="hint">ЦЧ = характеристика + 10 × ранг (без учёта общих штрафов; они применяются при броске). Необученный навык: −20. Специализация даёт +10 (галочка в окне броска). В правом столбце — цена следующего ранга.</p>
     <div style="overflow-x:auto"><table class="tbl skills">
       <thead><tr><th>Навык</th><th>Хар-ка</th><th>Ранг</th><th class="hide-m">Специализации</th><th>ЦЧ</th><th></th><th class="hide-m">XP</th></tr></thead>
-      <tbody>${SKILLS.map(([k,ru,g])=>skillRow(k,ru,g,false)).join("")}</tbody>
+      ${skillGroups()}
     </table></div>
   </div>
   <div class="card">
@@ -2995,6 +3004,8 @@ label.f>span{letter-spacing:.03em}
 .skname .en{display:block;font-weight:400}
 .rank-0 td{opacity:1}
 tr.untr .skname{color:var(--ink2);font-weight:500}
+.tbl.skills tbody.skgrp+tbody.skgrp tr.skhead td{padding-top:16px}
+.tbl.skills tr.skhead td{font-family:var(--serif);font-weight:700;font-size:15px;color:var(--accent);border-bottom:2px solid var(--line2);padding-bottom:4px}
 .lst{display:flex;flex-direction:column;gap:8px}
 .item{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--paper);display:grid;gap:8px}
 .item .hd{display:flex;gap:8px;align-items:center}
@@ -3830,11 +3841,18 @@ function attrCard(k,t,fx){
     <div class="fx">${fx}</div><div class="note" data-calc="an-${k}"></div></div>`;
 }
 
+// skills grouped by the chosen characteristic, highest rank first within a group
+function skillGroups(){
+  return CH.map(([c])=>{
+    const rows=SKILLS.filter(([k,,g])=>(g.includes(S.skills[k].gov)?S.skills[k].gov:g[0])===c).sort((x,y)=>n(S.skills[y[0]].rank)-n(S.skills[x[0]].rank)||x[1].localeCompare(y[1],"ru"));
+    return rows.length?`<tbody class="skgrp"><tr class="skhead"><td colspan="7">${CHN[c]} <span class="muted">${eff(c)}</span></td></tr>${rows.map(([k,ru,g])=>skillRow(k,ru,g,false)).join("")}</tbody>`:"";
+  }).join("");
+}
 function skillRow(k,ru,govs,isExtra,o){
   const s=isExtra?o:S.skills[k], base=isExtra?`extra.${o._i}`:`skills.${k}`;
   return `<tr class="${n(s.rank)<0?"untr":""}" data-skrow="${isExtra?"x:"+o.id:k}">
     <td class="skname">${isExtra?`<input data-b="${base}.name" value="${esc(s.name)}" style="font-weight:600">`:`${ru}`}</td>
-    <td style="width:80px">${sel(base+".gov",govOpts(govs))}</td>
+    <td style="width:80px">${sel(base+".gov",govOpts(govs),isExtra?"":'data-rr="1"')}</td>
     <td style="width:130px">${locked()?`<div style="display:flex;gap:3px;align-items:center;white-space:nowrap"><span style="flex:1">${RANKS_SHORT[n(s.rank)+1]}</span><button class="sm" data-adsk="${isExtra?"x:"+o.id:k}" data-v="-1" ${(advState().sk[isExtra?"x:"+o.id:k]||[]).length?"":"disabled"}>−</button><button class="sm pri" data-adsk="${isExtra?"x:"+o.id:k}" data-v="1" ${n(s.rank)>=5?"disabled":""}>＋</button></div>`:sel(base+".rank",RANKS.map((r,i)=>[r[0],RANKS_SHORT[i]]))}</td>
     <td class="hide-m">${inp(base+".spec",'placeholder="specializations"')}</td>
     <td class="num"><span class="tn" data-calc="tn-${isExtra?"x"+o.id:k}"></span></td>
@@ -3851,7 +3869,7 @@ function tSkills(){
     <p class="hint">TN = characteristic + 10 × rank (without general penalties; they apply when rolling). Untrained skill: −20. A specialization gives +10 (checkbox in the roll window). The right column shows the cost of the next rank.</p>
     <div style="overflow-x:auto"><table class="tbl skills">
       <thead><tr><th>Skill</th><th>Char.</th><th>Rank</th><th class="hide-m">Specializations</th><th>TN</th><th></th><th class="hide-m">XP</th></tr></thead>
-      <tbody>${SKILLS.map(([k,ru,g])=>skillRow(k,ru,g,false)).join("")}</tbody>
+      ${skillGroups()}
     </table></div>
   </div>
   <div class="card">
