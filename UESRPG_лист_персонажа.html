@@ -385,7 +385,18 @@ details.help .help-full{margin-top:4px}
   .dock.dopen .dockclose{display:block;flex:none;padding:6px 10px}
 }
 @media (max-width:440px){.modesw .sl{display:none}.modesw button{padding:5px 8px}}
-@media (max-width:440px){.avatar{width:40px;height:40px}.brandwrap{min-width:140px}}
+@media (max-width:440px){.avatar{width:40px;height:40px}}
+/* узкий экран (телефон, iPad в узком окне): имя и ☰ в первой строке, ниже штраф, режим и «Сохранить», ниже пулы */
+@media (max-width:640px){
+  .topin{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;grid-template-areas:"brand brand brand menu" "pen mode save save" "pools pools pools pools";align-items:center;gap:8px}
+  .topin>.brandwrap{grid-area:brand;min-width:0}
+  .topin>.menu{grid-area:menu;justify-self:end}
+  .topin>.penalty{grid-area:pen;justify-self:start}
+  .topin>.modesw{grid-area:mode}
+  .topin>.savebtn{grid-area:save;justify-self:end}
+  .topin>.pools{grid-area:pools}
+  .menu-pop{max-width:calc(100vw - 16px);max-height:calc(100vh - 90px);overflow:auto}
+}
 .pt{display:none}
 @media screen{
 .mode-play .pt{display:inline-block;color:var(--ink);overflow-wrap:anywhere}
@@ -3778,7 +3789,18 @@ details.help .help-full{margin-top:4px}
   .dock.dopen .dockclose{display:block;flex:none;padding:6px 10px}
 }
 @media (max-width:440px){.modesw .sl{display:none}.modesw button{padding:5px 8px}}
-@media (max-width:440px){.avatar{width:40px;height:40px}.brandwrap{min-width:140px}}
+@media (max-width:440px){.avatar{width:40px;height:40px}}
+/* narrow screen (phone, iPad in a narrow window): name and ☰ on the first row, then penalty, mode and Save, then pools */
+@media (max-width:640px){
+  .topin{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;grid-template-areas:"brand brand brand menu" "pen mode save save" "pools pools pools pools";align-items:center;gap:8px}
+  .topin>.brandwrap{grid-area:brand;min-width:0}
+  .topin>.menu{grid-area:menu;justify-self:end}
+  .topin>.penalty{grid-area:pen;justify-self:start}
+  .topin>.modesw{grid-area:mode}
+  .topin>.savebtn{grid-area:save;justify-self:end}
+  .topin>.pools{grid-area:pools}
+  .menu-pop{max-width:calc(100vw - 16px);max-height:calc(100vh - 90px);overflow:auto}
+}
 .pt{display:none}
 @media screen{
 .mode-play .pt{display:inline-block;color:var(--ink);overflow-wrap:anywhere}
