@@ -397,6 +397,10 @@ details.help .help-full{margin-top:4px}
   .topin>.pools{grid-area:pools}
   .menu-pop{max-width:calc(100vw - 16px);max-height:calc(100vh - 90px);overflow:auto}
 }
+@keyframes swl{from{transform:translateX(28px);opacity:.35}to{transform:none;opacity:1}}
+@keyframes swr{from{transform:translateX(-28px);opacity:.35}to{transform:none;opacity:1}}
+section.tab.sw-l{animation:swl .18s ease-out}section.tab.sw-r{animation:swr .18s ease-out}
+@media (prefers-reduced-motion:reduce){section.tab.sw-l,section.tab.sw-r{animation:none}}
 .pt{display:none}
 @media screen{
 .mode-play .pt{display:inline-block;color:var(--ink);overflow-wrap:anywhere}
@@ -3472,6 +3476,38 @@ $("#fileIn").addEventListener("change",async e=>{
 });
 window.addEventListener("beforeunload",()=>{ try{ localStorage.setItem(LS_KEY,JSON.stringify(store)); }catch(e){} });
 
+/* ============ SWIPE ============ */
+// на сенсорном экране свайп влево/вправо по листу открывает соседнюю вкладку (в порядке строки вкладок)
+let SW=null;
+function swipeBlocked(t){
+  for(let e=t;e&&e.nodeType===1&&e!==document.body;e=e.parentElement){
+    if(e.matches("input,textarea,select,[contenteditable],nav.tabs,.dock,.menu-pop,.dlg")) return true;
+    const ox=getComputedStyle(e).overflowX; if((ox==="auto"||ox==="scroll")&&e.scrollWidth>e.clientWidth+2) return true;
+  }
+  return false;
+}
+function swipeTab(dir){
+  const tabs=[...document.querySelectorAll("#tabs [data-tab]")].filter(b=>!b.hidden&&b.offsetParent!==null).map(b=>b.dataset.tab);
+  const i=tabs.indexOf(curTab), nx=tabs[i+dir]; if(i<0||!nx) return false;
+  showTab(nx); scrollTo({top:0});
+  const sec=$("section.tab.on"); if(sec){ sec.classList.remove("sw-l","sw-r"); void sec.offsetWidth; sec.classList.add(dir>0?"sw-l":"sw-r"); }
+  return true;
+}
+document.addEventListener("touchstart",e=>{
+  SW=null;
+  if(e.touches.length!==1||$("#dlgBack").classList.contains("open")||$("#menuPop").classList.contains("open")) return;
+  const t=e.touches[0]; if(t.clientX<24||t.clientX>innerWidth-24||swipeBlocked(e.target)) return;
+  SW={x:t.clientX,y:t.clientY,t:Date.now()};
+},{passive:true});
+document.addEventListener("touchmove",e=>{ if(SW&&e.touches.length!==1) SW=null; },{passive:true});
+document.addEventListener("touchend",e=>{
+  if(!SW) return; const t=e.changedTouches[0], dx=t.clientX-SW.x, dy=t.clientY-SW.y, dt=Date.now()-SW.t; SW=null;
+  if(dt>700||Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.8) return;
+  if(window.getSelection&&String(getSelection())) return;
+  swipeTab(dx<0?1:-1);
+},{passive:true});
+document.addEventListener("touchcancel",()=>{ SW=null; },{passive:true});
+
 /* ============ INIT ============ */
 setMode(MODE,true);
 if(gdOn()) gdLoadGsi().catch(()=>{});
@@ -3874,6 +3910,10 @@ details.help .help-full{margin-top:4px}
   .topin>.pools{grid-area:pools}
   .menu-pop{max-width:calc(100vw - 16px);max-height:calc(100vh - 90px);overflow:auto}
 }
+@keyframes swl{from{transform:translateX(28px);opacity:.35}to{transform:none;opacity:1}}
+@keyframes swr{from{transform:translateX(-28px);opacity:.35}to{transform:none;opacity:1}}
+section.tab.sw-l{animation:swl .18s ease-out}section.tab.sw-r{animation:swr .18s ease-out}
+@media (prefers-reduced-motion:reduce){section.tab.sw-l,section.tab.sw-r{animation:none}}
 .pt{display:none}
 @media screen{
 .mode-play .pt{display:inline-block;color:var(--ink);overflow-wrap:anywhere}
@@ -6948,6 +6988,38 @@ $("#fileIn").addEventListener("change",async e=>{
   toast(got.length===1?`Loaded: ${got[0].meta.name||"Nameless"}`:`Characters loaded: ${got.length}`);
 });
 window.addEventListener("beforeunload",()=>{ try{ localStorage.setItem(LS_KEY,JSON.stringify(store)); }catch(e){} });
+
+/* ============ SWIPE ============ */
+// on a touch screen a left/right swipe over the sheet opens the neighbouring tab (in tab-bar order)
+let SW=null;
+function swipeBlocked(t){
+  for(let e=t;e&&e.nodeType===1&&e!==document.body;e=e.parentElement){
+    if(e.matches("input,textarea,select,[contenteditable],nav.tabs,.dock,.menu-pop,.dlg")) return true;
+    const ox=getComputedStyle(e).overflowX; if((ox==="auto"||ox==="scroll")&&e.scrollWidth>e.clientWidth+2) return true;
+  }
+  return false;
+}
+function swipeTab(dir){
+  const tabs=[...document.querySelectorAll("#tabs [data-tab]")].filter(b=>!b.hidden&&b.offsetParent!==null).map(b=>b.dataset.tab);
+  const i=tabs.indexOf(curTab), nx=tabs[i+dir]; if(i<0||!nx) return false;
+  showTab(nx); scrollTo({top:0});
+  const sec=$("section.tab.on"); if(sec){ sec.classList.remove("sw-l","sw-r"); void sec.offsetWidth; sec.classList.add(dir>0?"sw-l":"sw-r"); }
+  return true;
+}
+document.addEventListener("touchstart",e=>{
+  SW=null;
+  if(e.touches.length!==1||$("#dlgBack").classList.contains("open")||$("#menuPop").classList.contains("open")) return;
+  const t=e.touches[0]; if(t.clientX<24||t.clientX>innerWidth-24||swipeBlocked(e.target)) return;
+  SW={x:t.clientX,y:t.clientY,t:Date.now()};
+},{passive:true});
+document.addEventListener("touchmove",e=>{ if(SW&&e.touches.length!==1) SW=null; },{passive:true});
+document.addEventListener("touchend",e=>{
+  if(!SW) return; const t=e.changedTouches[0], dx=t.clientX-SW.x, dy=t.clientY-SW.y, dt=Date.now()-SW.t; SW=null;
+  if(dt>700||Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.8) return;
+  if(window.getSelection&&String(getSelection())) return;
+  swipeTab(dx<0?1:-1);
+},{passive:true});
+document.addEventListener("touchcancel",()=>{ SW=null; },{passive:true});
 
 /* ============ INIT ============ */
 setMode(MODE,true);
