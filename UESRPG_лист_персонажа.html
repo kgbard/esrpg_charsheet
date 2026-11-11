@@ -3359,8 +3359,8 @@ function act(a,t){
     case "export": closeMenu(); saveFile({format:"uesrpg3e-sheet",version:1,character:S},`${safeName(S.meta.name||"персонаж")}.uesrpg.json`,[S.id]); break;
     case "exportAll": { closeMenu(); const cs=Object.values(store.chars); saveFile({format:"uesrpg3e-backup",version:1,characters:cs},`UESRPG_все_персонажи_${new Date().toISOString().slice(0,10)}.json`,cs.map(c=>c.id)); } break;
     case "import": $("#fileIn").click(); closeMenu(); break;
-    case "gdSave": { closeMenu(); const nm=S.meta.name||"Безымянный"; gdRun(()=>gdSaveChars([S.id]),()=>`Сохранено на Google Диск: ${nm}`); } break;
-    case "gdSaveAll": closeMenu(); gdRun(()=>gdSaveChars(Object.keys(store.chars)),k=>`Сохранено на Google Диск персонажей: ${k}`); break;
+    case "gdSave": { closeMenu(); const nm=S.meta.name||"Безымянный"; gdRun(()=>gdSaveChars([S.id]),()=>`Сохранено на Google Диск: ${nm}`+gdDupNote()); } break;
+    case "gdSaveAll": closeMenu(); gdRun(()=>gdSaveChars(Object.keys(store.chars)),k=>`Сохранено на Google Диск персонажей: ${k}`+gdDupNote()); break;
     case "gdLoad": closeMenu(); gdRun(()=>gdOpenList().then(()=>null),()=>""); break;
     case "gdOut": closeMenu(); gdSignOut(); break;
     case "print": closeMenu(); setTimeout(()=>print(),100); break;
@@ -3392,7 +3392,7 @@ function gdToken(){ return new Promise((res,rej)=>{
 async function gdFetch(url,opt){ opt=opt||{}; const t=await gdToken();
   let r; try{ r=await fetch(url,Object.assign({},opt,{headers:Object.assign({},opt.headers||{},{Authorization:"Bearer "+t})})); }catch(e){ throw new Error("Нет связи с Google Диском"); }
   if(r.status===401){ GD.token=""; GD.folder=""; renderMenu(); throw new Error("Вход в Google истёк — нажмите ещё раз"); }
-  if(!r.ok) throw new Error("Google Диск ответил ошибкой "+r.status);
+  if(!r.ok){ const e=new Error("Google Диск ответил ошибкой "+r.status); e.status=r.status; throw e; }
   return r; }
 async function gdFolder(){ if(GD.folder) return GD.folder;
   const q=encodeURIComponent(`name='${GD_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
@@ -3400,19 +3400,30 @@ async function gdFolder(){ if(GD.folder) return GD.folder;
   if(j.files&&j.files.length) return GD.folder=j.files[0].id;
   const c=await (await gdFetch(`${GD_API}?fields=id`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:GD_FOLDER,mimeType:"application/vnd.google-apps.folder"})})).json();
   return GD.folder=c.id; }
-async function gdFind(id){ const q=encodeURIComponent(`appProperties has { key='charId' and value='${id}' } and trashed=false`);
-  const j=await (await gdFetch(`${GD_API}?q=${q}&fields=files(id)`)).json(); return (j.files||[])[0]||null; }
+// все файлы этого персонажа на Диске, свежие первыми
+async function gdFindAll(id){ const q=encodeURIComponent(`appProperties has { key='charId' and value='${id}' } and trashed=false`);
+  const j=await (await gdFetch(`${GD_API}?q=${q}&orderBy=modifiedTime%20desc&fields=files(id)`)).json(); return j.files||[]; }
 function gdMultipart(meta,content){ const b="uesrpg"+Math.random().toString(36).slice(2);
   return {type:"multipart/related; boundary="+b, body:`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${b}--`}; }
-// каждый персонаж — отдельный файл; повторное сохранение обновляет тот же файл (по charId)
-async function gdSaveChars(ids){
-  const folder=await gdFolder(); let n=0;
+// каждый персонаж — один файл: повторное сохранение заменяет его, а не создаёт копию.
+// id файла запоминается на устройстве; если его нет — ищем по charId; лишние копии убираем в корзину Диска
+let GD_Q=Promise.resolve();
+function gdSaveChars(ids){ const job=GD_Q.then(()=>gdSaveNow(ids)); GD_Q=job.catch(()=>{}); return job; }
+async function gdUpload(fid,meta,json){ const mp=gdMultipart(meta,json);
+  const r=await (await gdFetch(`${GD_UP}${fid?"/"+encodeURIComponent(fid):""}?uploadType=multipart&fields=id`,{method:fid?"PATCH":"POST",headers:{"Content-Type":mp.type},body:mp.body})).json();
+  return r.id||fid; }
+async function gdSaveNow(ids){
+  const folder=await gdFolder(); let n=0; GD.dup=0; if(!store.gd) store.gd={};
   for(const id of ids){ const c=store.chars[id]; if(!c) continue;
     const json=JSON.stringify({format:"uesrpg3e-sheet",version:1,character:c},null,2), name=`${safeName(c.meta.name||"персонаж")}.uesrpg.json`;
-    const ex=await gdFind(id), meta=ex?{name}:{name,parents:[folder],mimeType:"application/json",appProperties:{app:"uesrpg",charId:id}}, mp=gdMultipart(meta,json);
-    await gdFetch(`${GD_UP}${ex?"/"+ex.id:""}?uploadType=multipart&fields=id`,{method:ex?"PATCH":"POST",headers:{"Content-Type":mp.type},body:mp.body});
-    if(!store.gd) store.gd={}; store.gd[id]={t:Date.now(),h:charHash(c)}; n++; }
+    const tag={app:"uesrpg",charId:id}; let fid=(store.gd[id]||{}).fid||"", out="";
+    if(fid){ try{ out=await gdUpload(fid,{name,trashed:false,appProperties:tag},json); }catch(e){ if(e.status!==404&&e.status!==403) throw e; fid=""; } }
+    if(!out){ const all=await gdFindAll(id); fid=all.length?all[0].id:"";
+      out=await gdUpload(fid,fid?{name,appProperties:tag}:{name,parents:[folder],mimeType:"application/json",appProperties:tag},json);
+      for(const f of all.slice(1)){ try{ await gdFetch(`${GD_API}/${encodeURIComponent(f.id)}?fields=id`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})}); GD.dup++; }catch(e){} } }
+    store.gd[id]={t:Date.now(),h:charHash(c),fid:out}; n++; }
   persist(); renderMenu(); return n; }
+function gdDupNote(){ return GD.dup?` · лишних копий убрано в корзину: ${GD.dup}`:""; }
 async function gdOpenList(){
   const folder=await gdFolder(), q=encodeURIComponent(`'${folder}' in parents and trashed=false`);
   const j=await (await gdFetch(`${GD_API}?q=${q}&orderBy=modifiedTime%20desc&pageSize=100&fields=files(id,name,modifiedTime,appProperties)`)).json();
@@ -3429,15 +3440,16 @@ async function gdLoadFile(fid){
   const list=Array.isArray(j.characters)?j.characters:[j.character||j];
   const clash=list.filter(c=>c&&c.id&&store.chars[c.id]);
   if(clash.length&&!confirm(`Заменить на этом устройстве: ${clash.map(c=>"«"+(c.meta&&c.meta.name||"Безымянный")+"»").join(", ")} — версией с Google Диска?`)) return null;
-  const got=importChars(j,true); if(!store.gd) store.gd={}; got.forEach(c=>store.gd[c.id]={t:Date.now(),h:charHash(c)});
+  const got=importChars(j,true); if(!store.gd) store.gd={}; got.forEach(c=>store.gd[c.id]={t:Date.now(),h:charHash(c),fid:list.length===1?fid:""});
   store.cur=got[0].id; S=got[0]; persist(); closeDlg(); render(); return got; }
 function gdRun(job,ok){ toast("Google Диск…"); job().then(r=>{ if(r!=null) toast(ok(r)); }).catch(e=>toast(e&&e.message||"Ошибка Google Диска")); }
 function gdSignOut(){ try{ if(GD.token&&window.google&&google.accounts&&google.accounts.oauth2) google.accounts.oauth2.revoke(GD.token,()=>{}); }catch(e){} GD={token:"",exp:0,folder:"",list:[]}; renderMenu(); toast("Вы вышли из Google"); }
-// разбор файла: один персонаж или резервная копия всех; keepIds — с Google Диска (тот же персонаж заменяет локальную копию)
+// разбор файла: один персонаж или резервная копия всех; keepIds — с Google Диска (тот же персонаж заменяет локальную копию);
+// из обычного файла id сохраняется, если такого персонажа на устройстве ещё нет, иначе — копия с новым id
 function importChars(j,keepIds){
   const list=Array.isArray(j.characters)?j.characters:[j.character||j];
   list.forEach(c=>{ if(!c||!c.meta||!c.ch) throw new Error("bad"); });
-  return list.map(c=>{ if(!keepIds||!c.id) c.id=uid(); migrate(c); convChar(c); store.chars[c.id]=c; return c; });
+  return list.map(c=>{ if(!c.id||(!keepIds&&store.chars[c.id])) c.id=uid(); migrate(c); convChar(c); store.chars[c.id]=c; return c; });
 }
 function saveFile(data,name,ids){
   const json=JSON.stringify(data,null,2);
@@ -6872,8 +6884,8 @@ function act(a,t){
     case "export": closeMenu(); saveFile({format:"uesrpg3e-sheet",version:1,character:S},`${safeName(S.meta.name||"character")}.uesrpg.json`,[S.id]); break;
     case "exportAll": { closeMenu(); const cs=Object.values(store.chars); saveFile({format:"uesrpg3e-backup",version:1,characters:cs},`UESRPG_all_characters_${new Date().toISOString().slice(0,10)}.json`,cs.map(c=>c.id)); } break;
     case "import": $("#fileIn").click(); closeMenu(); break;
-    case "gdSave": { closeMenu(); const nm=S.meta.name||"Nameless"; gdRun(()=>gdSaveChars([S.id]),()=>`Saved to Google Drive: ${nm}`); } break;
-    case "gdSaveAll": closeMenu(); gdRun(()=>gdSaveChars(Object.keys(store.chars)),k=>`Characters saved to Google Drive: ${k}`); break;
+    case "gdSave": { closeMenu(); const nm=S.meta.name||"Nameless"; gdRun(()=>gdSaveChars([S.id]),()=>`Saved to Google Drive: ${nm}`+gdDupNote()); } break;
+    case "gdSaveAll": closeMenu(); gdRun(()=>gdSaveChars(Object.keys(store.chars)),k=>`Characters saved to Google Drive: ${k}`+gdDupNote()); break;
     case "gdLoad": closeMenu(); gdRun(()=>gdOpenList().then(()=>null),()=>""); break;
     case "gdOut": closeMenu(); gdSignOut(); break;
     case "print": closeMenu(); setTimeout(()=>print(),100); break;
@@ -6905,7 +6917,7 @@ function gdToken(){ return new Promise((res,rej)=>{
 async function gdFetch(url,opt){ opt=opt||{}; const t=await gdToken();
   let r; try{ r=await fetch(url,Object.assign({},opt,{headers:Object.assign({},opt.headers||{},{Authorization:"Bearer "+t})})); }catch(e){ throw new Error("No connection to Google Drive"); }
   if(r.status===401){ GD.token=""; GD.folder=""; renderMenu(); throw new Error("Google sign-in expired — tap again"); }
-  if(!r.ok) throw new Error("Google Drive returned error "+r.status);
+  if(!r.ok){ const e=new Error("Google Drive returned error "+r.status); e.status=r.status; throw e; }
   return r; }
 async function gdFolder(){ if(GD.folder) return GD.folder;
   const q=encodeURIComponent(`name='${GD_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
@@ -6913,19 +6925,30 @@ async function gdFolder(){ if(GD.folder) return GD.folder;
   if(j.files&&j.files.length) return GD.folder=j.files[0].id;
   const c=await (await gdFetch(`${GD_API}?fields=id`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:GD_FOLDER,mimeType:"application/vnd.google-apps.folder"})})).json();
   return GD.folder=c.id; }
-async function gdFind(id){ const q=encodeURIComponent(`appProperties has { key='charId' and value='${id}' } and trashed=false`);
-  const j=await (await gdFetch(`${GD_API}?q=${q}&fields=files(id)`)).json(); return (j.files||[])[0]||null; }
+// all files of this character on Drive, newest first
+async function gdFindAll(id){ const q=encodeURIComponent(`appProperties has { key='charId' and value='${id}' } and trashed=false`);
+  const j=await (await gdFetch(`${GD_API}?q=${q}&orderBy=modifiedTime%20desc&fields=files(id)`)).json(); return j.files||[]; }
 function gdMultipart(meta,content){ const b="uesrpg"+Math.random().toString(36).slice(2);
   return {type:"multipart/related; boundary="+b, body:`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${b}--`}; }
-// each character is a separate file; saving again updates the same file (by charId)
-async function gdSaveChars(ids){
-  const folder=await gdFolder(); let n=0;
+// each character is one file: saving again replaces it instead of creating a copy.
+// the file id is remembered on the device; if missing, search by charId; extra copies go to the Drive trash
+let GD_Q=Promise.resolve();
+function gdSaveChars(ids){ const job=GD_Q.then(()=>gdSaveNow(ids)); GD_Q=job.catch(()=>{}); return job; }
+async function gdUpload(fid,meta,json){ const mp=gdMultipart(meta,json);
+  const r=await (await gdFetch(`${GD_UP}${fid?"/"+encodeURIComponent(fid):""}?uploadType=multipart&fields=id`,{method:fid?"PATCH":"POST",headers:{"Content-Type":mp.type},body:mp.body})).json();
+  return r.id||fid; }
+async function gdSaveNow(ids){
+  const folder=await gdFolder(); let n=0; GD.dup=0; if(!store.gd) store.gd={};
   for(const id of ids){ const c=store.chars[id]; if(!c) continue;
     const json=JSON.stringify({format:"uesrpg3e-sheet",version:1,character:c},null,2), name=`${safeName(c.meta.name||"character")}.uesrpg.json`;
-    const ex=await gdFind(id), meta=ex?{name}:{name,parents:[folder],mimeType:"application/json",appProperties:{app:"uesrpg",charId:id}}, mp=gdMultipart(meta,json);
-    await gdFetch(`${GD_UP}${ex?"/"+ex.id:""}?uploadType=multipart&fields=id`,{method:ex?"PATCH":"POST",headers:{"Content-Type":mp.type},body:mp.body});
-    if(!store.gd) store.gd={}; store.gd[id]={t:Date.now(),h:charHash(c)}; n++; }
+    const tag={app:"uesrpg",charId:id}; let fid=(store.gd[id]||{}).fid||"", out="";
+    if(fid){ try{ out=await gdUpload(fid,{name,trashed:false,appProperties:tag},json); }catch(e){ if(e.status!==404&&e.status!==403) throw e; fid=""; } }
+    if(!out){ const all=await gdFindAll(id); fid=all.length?all[0].id:"";
+      out=await gdUpload(fid,fid?{name,appProperties:tag}:{name,parents:[folder],mimeType:"application/json",appProperties:tag},json);
+      for(const f of all.slice(1)){ try{ await gdFetch(`${GD_API}/${encodeURIComponent(f.id)}?fields=id`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})}); GD.dup++; }catch(e){} } }
+    store.gd[id]={t:Date.now(),h:charHash(c),fid:out}; n++; }
   persist(); renderMenu(); return n; }
+function gdDupNote(){ return GD.dup?` · extra copies moved to trash: ${GD.dup}`:""; }
 async function gdOpenList(){
   const folder=await gdFolder(), q=encodeURIComponent(`'${folder}' in parents and trashed=false`);
   const j=await (await gdFetch(`${GD_API}?q=${q}&orderBy=modifiedTime%20desc&pageSize=100&fields=files(id,name,modifiedTime,appProperties)`)).json();
@@ -6942,15 +6965,16 @@ async function gdLoadFile(fid){
   const list=Array.isArray(j.characters)?j.characters:[j.character||j];
   const clash=list.filter(c=>c&&c.id&&store.chars[c.id]);
   if(clash.length&&!confirm(`Replace on this device: ${clash.map(c=>"«"+(c.meta&&c.meta.name||"Nameless")+"»").join(", ")} — with the version from Google Drive?`)) return null;
-  const got=importChars(j,true); if(!store.gd) store.gd={}; got.forEach(c=>store.gd[c.id]={t:Date.now(),h:charHash(c)});
+  const got=importChars(j,true); if(!store.gd) store.gd={}; got.forEach(c=>store.gd[c.id]={t:Date.now(),h:charHash(c),fid:list.length===1?fid:""});
   store.cur=got[0].id; S=got[0]; persist(); closeDlg(); render(); return got; }
 function gdRun(job,ok){ toast("Google Drive…"); job().then(r=>{ if(r!=null) toast(ok(r)); }).catch(e=>toast(e&&e.message||"Google Drive error")); }
 function gdSignOut(){ try{ if(GD.token&&window.google&&google.accounts&&google.accounts.oauth2) google.accounts.oauth2.revoke(GD.token,()=>{}); }catch(e){} GD={token:"",exp:0,folder:"",list:[]}; renderMenu(); toast("Signed out of Google"); }
-// parse a file: one character or a backup of all; keepIds — from Google Drive (the same character replaces the local copy)
+// parse a file: one character or a backup of all; keepIds: from Google Drive (the same character replaces the local copy);
+// from a regular file the id is kept if the character is not on this device yet, otherwise a copy with a new id
 function importChars(j,keepIds){
   const list=Array.isArray(j.characters)?j.characters:[j.character||j];
   list.forEach(c=>{ if(!c||!c.meta||!c.ch) throw new Error("bad"); });
-  return list.map(c=>{ if(!keepIds||!c.id) c.id=uid(); migrate(c); convChar(c); store.chars[c.id]=c; return c; });
+  return list.map(c=>{ if(!c.id||(!keepIds&&store.chars[c.id])) c.id=uid(); migrate(c); convChar(c); store.chars[c.id]=c; return c; });
 }
 function saveFile(data,name,ids){
   const json=JSON.stringify(data,null,2);
