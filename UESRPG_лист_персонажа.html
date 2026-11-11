@@ -3371,7 +3371,7 @@ function safeName(s){ return String(s).replace(/[\\/:*?"<>|]/g,"_"); }
 /* ============ GOOGLE DRIVE ============ */
 // сохранение на Google Диск игрока: вход Google в браузере, доступ только к файлам, которые создал сам лист (drive.file), папка «UESRPG»
 // clientId — OAuth Client ID (тип «Веб-приложение», источник https://kgbard.github.io); пустой — пункты меню скрыты
-const GDRIVE={clientId:"",allowFile:false};
+const GDRIVE={clientId:"962921340835-40q9ge7d72jc37jqjhlqsc550kmdbbam.apps.googleusercontent.com",allowFile:false};
 const GD_SCOPE="https://www.googleapis.com/auth/drive.file", GD_FOLDER="UESRPG", GD_API="https://www.googleapis.com/drive/v3/files", GD_UP="https://www.googleapis.com/upload/drive/v3/files";
 let GD={token:"",exp:0,folder:"",list:[]};
 function gdOn(){ return !!GDRIVE.clientId&&(location.protocol!=="file:"||GDRIVE.allowFile); }
@@ -6848,7 +6848,7 @@ function safeName(s){ return String(s).replace(/[\\/:*?"<>|]/g,"_"); }
 /* ============ GOOGLE DRIVE ============ */
 // saving to the player’s Google Drive: Google sign-in in the browser, access only to files the sheet created itself (drive.file), folder “UESRPG”
 // clientId — OAuth Client ID (type “Web application”, origin https://kgbard.github.io); empty — menu items hidden
-const GDRIVE={clientId:"",allowFile:false};
+const GDRIVE={clientId:"962921340835-40q9ge7d72jc37jqjhlqsc550kmdbbam.apps.googleusercontent.com",allowFile:false};
 const GD_SCOPE="https://www.googleapis.com/auth/drive.file", GD_FOLDER="UESRPG", GD_API="https://www.googleapis.com/drive/v3/files", GD_UP="https://www.googleapis.com/upload/drive/v3/files";
 let GD={token:"",exp:0,folder:"",list:[]};
 function gdOn(){ return !!GDRIVE.clientId&&(location.protocol!=="file:"||GDRIVE.allowFile); }
