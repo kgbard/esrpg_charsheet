@@ -2085,7 +2085,9 @@ function deathApply(r){ const LB=D().LB;
   if(n(S.deathFails)>LB){ S.dead=true; r.note=(r.note?r.note+" ":"")+`<b class="badc">☠ Персонаж умер</b> — провалов ${S.deathFails} при LB ${LB}.`; addLog(`☠ ${esc(S.meta.name||"Персонаж")} умер (провалов теста Выносливости: ${S.deathFails})`); }
   else r.note=(r.note?r.note+" ":"")+`Провалов: ${n(S.deathFails)} из допустимых ${LB}.`; }
 // переброс уже брошенного теста: снять прошлый провал теста на смерть, заново применить итог
-function rerollApply(prev,r){ if(R.death){ if(!prev.ok) S.deathFails=Math.max(0,n(S.deathFails)-1); S.dead=false; deathApply(r); } if(R.after){ const nt=R.after(r); if(nt) r.note=(r.note?r.note+" ":"")+nt; } }
+// итог броска, который меняет данные (рана, стабилизация): применить и сразу перерисовать лист, не только окно броска
+function afterRoll(r){ if(!R||!R.after) return; const nt=R.after(r); if(nt) r.note=(r.note?r.note+" ":"")+nt; rerenderKeep(); }
+function rerollApply(prev,r){ if(R.death){ if(!prev.ok) S.deathFails=Math.max(0,n(S.deathFails)-1); S.dead=false; deathApply(r); } afterRoll(r); }
 function d100(tn,forced){
   const man=forced>=1&&forced<=100, roll=man?Math.round(forced):rnd(100);
   const FA=fateAll(), lucky=FA.lucky, unl=FA.unlucky;
@@ -2116,7 +2118,7 @@ function doRoll(){
   if(R.apCost&&R.payAP){ S.cur.ap=Math.max(0,n(S.cur.ap)-apCost()); S.aim=0; } // любое действие (кроме прицеливания) тратит или прерывает цепочку прицеливания
   if(R.attack&&R.payAP!==false) S.attacks=n(S.attacks)+1;
   if(R.death) deathApply(r);
-  if(R.after){ const nt=R.after(r); if(nt) r.note=(r.note?r.note+" ":"")+nt; }
+  afterRoll(r);
   if(R.burnTest&&!r.ok){ S.conds.burning=true; S.condX.burning=n(S.condX.burning)+1; r.note="Персонаж загорелся: Горение +1."; }
   if(R.spell){
     const s=S.spells[R.spell.i]; const d=D(); let cost=n(s.cost);
@@ -6275,7 +6277,9 @@ function deathApply(r){ const LB=D().LB;
   if(n(S.deathFails)>LB){ S.dead=true; r.note=(r.note?r.note+" ":"")+`<b class="badc">☠ The character died</b> — failures ${S.deathFails} with LB ${LB}.`; addLog(`☠ ${esc(S.meta.name||"Character")} died (Endurance test failures: ${S.deathFails})`); }
   else r.note=(r.note?r.note+" ":"")+`Failures: ${n(S.deathFails)} of allowed ${LB}.`; }
 // rerolling a rolled test: undo the previous death-test failure and apply the new result
-function rerollApply(prev,r){ if(R.death){ if(!prev.ok) S.deathFails=Math.max(0,n(S.deathFails)-1); S.dead=false; deathApply(r); } if(R.after){ const nt=R.after(r); if(nt) r.note=(r.note?r.note+" ":"")+nt; } }
+// a roll result that changes data (a wound, stabilizing): apply it and redraw the sheet at once, not only the roll window
+function afterRoll(r){ if(!R||!R.after) return; const nt=R.after(r); if(nt) r.note=(r.note?r.note+" ":"")+nt; rerenderKeep(); }
+function rerollApply(prev,r){ if(R.death){ if(!prev.ok) S.deathFails=Math.max(0,n(S.deathFails)-1); S.dead=false; deathApply(r); } afterRoll(r); }
 function d100(tn,forced){
   const man=forced>=1&&forced<=100, roll=man?Math.round(forced):rnd(100);
   const FA=fateAll(), lucky=FA.lucky, unl=FA.unlucky;
@@ -6306,7 +6310,7 @@ function doRoll(){
   if(R.apCost&&R.payAP){ S.cur.ap=Math.max(0,n(S.cur.ap)-apCost()); S.aim=0; } // any action (other than aiming) uses up or breaks the aim chain
   if(R.attack&&R.payAP!==false) S.attacks=n(S.attacks)+1;
   if(R.death) deathApply(r);
-  if(R.after){ const nt=R.after(r); if(nt) r.note=(r.note?r.note+" ":"")+nt; }
+  afterRoll(r);
   if(R.burnTest&&!r.ok){ S.conds.burning=true; S.condX.burning=n(S.condX.burning)+1; r.note="The character catches fire: Burning +1."; }
   if(R.spell){
     const s=S.spells[R.spell.i]; const d=D(); let cost=n(s.cost);
