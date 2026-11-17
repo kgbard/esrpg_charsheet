@@ -901,6 +901,8 @@ function capOf(name){ const m=String(name||"").match(/(?:holds|вмещает)\s
 function migrate(s){
   if(!s.opt||typeof s.opt!=="object") s.opt={};
   (s.wounds||[]).forEach(w=>{ if(!w.id) w.id=uid(); if(w.shock===undefined) w.shock=""; if(w.bleed===undefined) w.bleed=null; });
+  // персонаж из старой версии: «Покалечена часть тела» ставилась листом при ране в конечность — считать её состоянием от ран, чтобы снялась при заживлении
+  if(s.wAuto===undefined){ s.wAuto={}; if(s.conds&&s.conds.crippled&&(s.wounds||[]).some(w=>["rarm","larm","rleg","lleg"].includes(w.loc))) s.wAuto.crippled=1; }
   (s.inv||[]).forEach(i=>{ if(!i.id) i.id=uid(); if(i.cap===undefined){ const c=capOf(i.name); if(c) i.cap=c; } });
   const b=blank();
   if(s.cc===undefined){ s.cc=blankCC(); s.cc.done=!!(s.meta&&(s.meta.name||n(s.meta.xpSpent))||(s.log&&s.log.length)); }
@@ -5093,6 +5095,8 @@ function capOf(name){ const m=String(name||"").match(/(?:holds|вмещает)\s
 function migrate(s){
   if(!s.opt||typeof s.opt!=="object") s.opt={};
   (s.wounds||[]).forEach(w=>{ if(!w.id) w.id=uid(); if(w.shock===undefined) w.shock=""; if(w.bleed===undefined) w.bleed=null; });
+  // a character from the old version: Crippled Body Part was set by the sheet for a limb wound — treat it as wound-made so it clears on healing
+  if(s.wAuto===undefined){ s.wAuto={}; if(s.conds&&s.conds.crippled&&(s.wounds||[]).some(w=>["rarm","larm","rleg","lleg"].includes(w.loc))) s.wAuto.crippled=1; }
   (s.inv||[]).forEach(i=>{ if(!i.id) i.id=uid(); if(i.cap===undefined){ const c=capOf(i.name); if(c) i.cap=c; } });
   const b=blank();
   if(s.cc===undefined){ s.cc=blankCC(); s.cc.done=!!(s.meta&&(s.meta.name||n(s.meta.xpSpent))||(s.log&&s.log.length)); }
